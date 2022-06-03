@@ -29,7 +29,6 @@ variable "tag" {
   default     = "latest"
 }
 
-
 variable "envvars" {
   type=map(string)
   description = "variables to set in the environment of the container"
@@ -41,13 +40,15 @@ resource "aws_ecs_cluster" "staging" {
   name = "${var.prefix}-cluster"
 }
 
-
 data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnet_ids" "default" {
-  vpc_id = "${data.aws_vpc.default.id}"
+data "aws_subnets" "default" {
+   filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 data "aws_caller_identity" "current" {}
@@ -101,7 +102,7 @@ resource "aws_security_group" "ecs_tasks" {
 
 resource "aws_lb" "staging" {
   name               = "${var.prefix}-alb"
-  subnets            = data.aws_subnet_ids.default.ids
+  subnets            = data.aws_subnets.default.ids
   load_balancer_type = "application"
   security_groups    = [aws_security_group.lb.id]
 
@@ -237,7 +238,7 @@ resource "aws_ecs_service" "staging" {
 
   network_configuration {
     security_groups  = [aws_security_group.ecs_tasks.id]
-    subnets          = data.aws_subnet_ids.default.ids
+    subnets          = data.aws_subnets.default.ids
     assign_public_ip = true
   }
 
@@ -264,13 +265,10 @@ resource "aws_cloudwatch_log_group" "dummyapi" {
   }
 }
 
-// example -> ./push.sh . 123456789012.dkr.ecr.us-west-1.amazonaws.com/hello-world latest
-
-resource "null_resource" "push" {
+// example -> ./push_docker_image.sh . 123456789012.dkr.ecr.us-west-1.amazonaws.com/hello-world latest
+resource "null_resource" "push_docker_image" {
   provisioner "local-exec" {
-     command     = "${coalesce("push.sh", "${path.module}/push.sh")} ${var.source_path} ${aws_ecr_repository.repo.repository_url} ${var.tag} ${data.aws_caller_identity.current.account_id}"
+     command     = "./push_docker_image.sh ${var.source_path} ${aws_ecr_repository.repo.repository_url} ${var.tag} ${data.aws_caller_identity.current.account_id}"
      interpreter = ["bash", "-c"]
   }
 }
-
-
